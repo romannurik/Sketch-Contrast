@@ -1,16 +1,12 @@
-![Flow Exporter Icon](https://raw.githubusercontent.com/romannurik/Sketch-FlowExporter/master/assets/icon.png)
+![Flow Exporter Icon](https://raw.githubusercontent.com/romannurik/Sketch-Contrast/master/assets/icon.png)
 
-# Flow Exporter plugin for Sketch 49+
+# Contrast plugin for Sketch 49+
 
-This plugin exports prototype flows (artboards you link together) to HTML, which you can then host using any web host (such as [Firebase Hosting](https://firebase.google.com/docs/hosting/)) and share with users, design stakeholders, etc.
+This plugin generates a pass/fail type contrast report (currently AA only) for an artboard.
 
 # Installation
 
-* [Download the latest release](https://github.com/romannurik/Sketch-FlowExporter/releases/latest) and double-click the `.sketchplugin` file to install.
-
-* Or you can install the plugin with [Sketch Runner](http://bit.ly/SketchRunnerWebsite).
-
-  <a href="http://bit.ly/SketchRunnerWebsite"><img src="http://bit.ly/RunnerBadgeBlue" width="160"></a>
+* [Download the latest release](https://github.com/romannurik/Sketch-Contrast/releases/latest) and double-click the `.sketchplugin` file to install.
 
 # Build instructions
 

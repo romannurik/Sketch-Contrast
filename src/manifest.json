@@ -1,0 +1,22 @@
+{
+  "identifier" : "net.nurik.roman.sketch.contrast",
+  "compatibleVersion": 49,
+  "bundleVersion": 1,
+  "icon": "icon.png",
+  "commands": [
+    {
+      "name": "Check type contrast for artboard",
+      "identifier": "check-contrast",
+      "script": "./command-check-contrast.js",
+      "shortcut" : "command option k",
+      "description" : "Show a AA pass/fail type contrast report for current artboard.",
+      "icon" : "icon.png"
+    }
+  ],
+  "menu": {
+    "title": "🌓 Contrast",
+    "items": [
+      "check-contrast"
+    ]
+  }
+}

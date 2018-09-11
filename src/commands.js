@@ -22,8 +22,13 @@ import * as util from './lib/util';
 const META_GROUP_NAME = '___CONTRAST___';
 const TEXT_LAYER_PREDICATE = NSPredicate.predicateWithFormat('className == %@', 'MSTextLayer');
 
+const Mode = {
+  IMAGE: 0,
+  INLINE: 1,
+};
 
-export default function(context) {
+
+export function onCheckCurrentArtboard(context) {
   if (!context.selection.length) {
     UI.message('Select a layer in an artboard');
     return;
@@ -39,55 +44,91 @@ export default function(context) {
     return;
   }
 
-  let contrastMetaGroup = artboard.layers().find(layer => layer.name() == META_GROUP_NAME);
-  if (contrastMetaGroup) {
-    contrastMetaGroup.removeFromParent();
+  let {path} = createContrastReport(context, artboard, {mode: Mode.IMAGE});
+  NSWorkspace.sharedWorkspace().openFile(path);
+}
+
+
+export function onCheckAllArtboards(context) {
+  let page = context.document.currentPage();
+  if (removeInlineContrastReports(page)) {
     return;
   }
 
+  Array.from(page.layers()).filter(l => l instanceof MSArtboardGroup).forEach(a => {
+    createContrastReport(context, a, {mode: Mode.INLINE});
+  });
+}
+
+
+/**
+ * Removes inline contrast reports created by the INLINE mode under the given parent
+ * (document, page, or artboard). Returns true if anything was removed.
+ */
+function removeInlineContrastReports(parent) {
+  let contrastMetaGroups = common.getAllLayersMatchingPredicate(
+      parent,
+      NSPredicate.predicateWithFormat('name == %@', META_GROUP_NAME));
+  if (contrastMetaGroups.length) {
+    contrastMetaGroups.forEach(g => g.removeFromParent());
+    return true;
+  }
+
+  return false;
+}
+
+
+/**
+ * Creates a contrast report for the given artboard. Mode options are IMAGE,
+ * which produces a PNG file report, or INLINE which draws the report in the artboard.
+ */
+function createContrastReport(context, artboard, {mode = Mode.IMAGE} = {}) {
   let artboardCopy = artboard.copy();
   context.document.currentPage().addLayer(artboardCopy);
 
-  try {
-    let visibleTextLayerInfos = findVisibleTextLayerInfos(artboardCopy);
-    visibleTextLayerInfos.forEach(({layer}) => layer.setIsVisible(false));
-    let metaGroup = MSLayerGroup.new();
-    metaGroup.setName(META_GROUP_NAME);
+  let visibleTextLayerInfos = findVisibleTextLayerInfos(artboardCopy);
+  visibleTextLayerInfos.forEach(({layer}) => layer.setIsVisible(false));
+  let metaGroup = MSLayerGroup.new();
+  metaGroup.setName(META_GROUP_NAME);
+  if (mode == Mode.IMAGE) {
     artboardCopy.addLayer(metaGroup);
-    let {image} = util.getArtboardImage(context.document, artboardCopy);
-    let bitmapImageRep = NSBitmapImageRep.imageRepWithData(image.TIFFRepresentation());
-    for (let {layer, opacity, rectangle} of visibleTextLayerInfos) {
-      let {x,y,w,h} = rectangle;
-      let {status} = getTypeContrastRating(layer, opacity, rectangle, bitmapImageRep);
-      let rectShape = MSRectangleShape.alloc().init();
-      rectShape.frame = MSRect.rectWithRect(NSMakeRect(x, y, w, h));
-      let fillLayer = MSShapeGroup.shapeWithPath(rectShape);
-      let fill = fillLayer.style().addStylePartOfType(0);
-      if (status == 'pass') {
-        fill.color = MSColor.colorWithRed_green_blue_alpha(0, .7, 0, .4);
-      } else if (status == 'fail') {
-        fill.color = MSColor.colorWithRed_green_blue_alpha(1, 0, 0, .4);
-      }
-      metaGroup.addLayer(fillLayer);
-      // debug
-      // let cr = MSTextLayer.new();
-      // cr.setTextAlignment(2);
-      // cr.setVerticalAlignment(1);
-      // cr.setTextBehaviour(2);
-      // cr.frame = MSRect.rectWithRect(NSMakeRect(x, y, w, h));
-      // cr.setStringValue(t || contrastRatio);
-      // metaGroup.addLayer(cr);
+  } else {
+    artboard.addLayer(metaGroup);
+  }
+  let {image} = util.getArtboardImage(context.document, artboardCopy);
+  let bitmapImageRep = NSBitmapImageRep.imageRepWithData(image.TIFFRepresentation());
+  for (let {layer, opacity, rectangle} of visibleTextLayerInfos) {
+    let {x,y,w,h} = rectangle;
+    let {status} = getTypeContrastRating(layer, opacity, rectangle, bitmapImageRep);
+    let rectShape = MSRectangleShape.alloc().init();
+    rectShape.frame = MSRect.rectWithRect(NSMakeRect(x, y, w, h));
+    let fillLayer = MSShapeGroup.shapeWithPath(rectShape);
+    let fill = fillLayer.style().addStylePartOfType(0);
+    if (status == 'pass') {
+      fill.color = MSColor.colorWithRed_green_blue_alpha(0, .7, 0, .4);
+    } else if (status == 'fail') {
+      fill.color = MSColor.colorWithRed_green_blue_alpha(1, 0, 0, .4);
+    } else if (status == 'unknown') {
+      fill.color = MSColor.colorWithRed_green_blue_alpha(220, 200, 0, .2);
     }
-    visibleTextLayerInfos.forEach(({layer}) => layer.setIsVisible(true));
-    let {path} = util.getArtboardImage(context.document, artboardCopy);
-    NSWorkspace.sharedWorkspace().openFile(path);
-  } catch (e) {
-    throw e;
-    // log(e.message);
-    // log(e.stack.replace(/(^|\n)/g, '$1  > '));
+    metaGroup.addLayer(fillLayer);
+    // debug
+    // let cr = MSTextLayer.new();
+    // cr.setTextAlignment(2);
+    // cr.setVerticalAlignment(1);
+    // cr.setTextBehaviour(2);
+    // cr.frame = MSRect.rectWithRect(NSMakeRect(x, y, w, h));
+    // cr.setStringValue(t || contrastRatio);
+    // metaGroup.addLayer(cr);
+  }
+  visibleTextLayerInfos.forEach(({layer}) => layer.setIsVisible(true));
+  let returnValue = {};
+  if (mode == Mode.IMAGE) {
+    returnValue = util.getArtboardImage(context.document, artboardCopy);
   }
 
   artboardCopy.removeFromParent();
+  return returnValue;
 }
 
 
@@ -102,6 +143,16 @@ function getTypeContrastRating(textLayer, opacity, {x, y, w, h}, bitmapImageRep)
   ];
   let textStyleAttr = textLayer.style().textStyle().attributes();
   let textMSImmColor = textStyleAttr.MSAttributedStringColorAttribute;
+  if (!textMSImmColor) {
+    let names = [];
+    let parent = textLayer;
+    while (parent) {
+      names.unshift(parent.name());
+      parent = parent.parentGroup();
+    }
+    log(`Can't get text color for text layer ${names.join(' > ')}`);
+    return {status: 'unknown', contrastRatio: 'NA'};
+  }
   let textColor = {
     r: Math.round(255 * textMSImmColor.red()),
     g: Math.round(255 * textMSImmColor.green()),

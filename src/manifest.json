@@ -6,17 +6,31 @@
   "commands": [
     {
       "name": "Check type contrast for artboard",
+      "handlers": {
+        "run": "onCheckCurrentArtboard"
+      },
       "identifier": "check-contrast",
-      "script": "./command-check-contrast.js",
+      "script": "./commands.js",
       "shortcut" : "command option k",
       "description" : "Show a AA pass/fail type contrast report for current artboard.",
+      "icon" : "icon.png"
+    },
+    {
+      "name": "Check type contrast for this page",
+      "handlers": {
+        "run": "onCheckAllArtboards"
+      },
+      "identifier": "check-contrast-all",
+      "script": "./commands.js",
+      "description" : "Show/hide a AA pass/fail type contrast report for all artboards on the page inline.",
       "icon" : "icon.png"
     }
   ],
   "menu": {
     "title": "🌓 Contrast",
     "items": [
-      "check-contrast"
+      "check-contrast",
+      "check-contrast-all"
     ]
   }
 }

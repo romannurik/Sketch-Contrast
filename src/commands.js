@@ -99,7 +99,7 @@ function createContrastReport(context, artboard, {mode = Mode.IMAGE} = {}) {
   let bitmapImageRep = NSBitmapImageRep.imageRepWithData(image.TIFFRepresentation());
   for (let {layer, opacity, rectangle} of visibleTextLayerInfos) {
     let {x,y,w,h} = rectangle;
-    let {status} = getTypeContrastRating(layer, opacity, rectangle, bitmapImageRep);
+    let {status, contrastRatio} = getTypeContrastRating(layer, opacity, rectangle, bitmapImageRep);
     let rectShape = MSRectangleShape.alloc().init();
     rectShape.frame = MSRect.rectWithRect(NSMakeRect(x, y, w, h));
     let fillLayer = MSShapeGroup.shapeWithPath(rectShape);
@@ -112,14 +112,29 @@ function createContrastReport(context, artboard, {mode = Mode.IMAGE} = {}) {
       fill.color = MSColor.colorWithRed_green_blue_alpha(220, 200, 0, .2);
     }
     metaGroup.addLayer(fillLayer);
-    // debug
-    // let cr = MSTextLayer.new();
-    // cr.setTextAlignment(2);
-    // cr.setVerticalAlignment(1);
-    // cr.setTextBehaviour(2);
-    // cr.frame = MSRect.rectWithRect(NSMakeRect(x, y, w, h));
-    // cr.setStringValue(t || contrastRatio);
-    // metaGroup.addLayer(cr);
+    if (status != 'pass') {
+      let overlayText = MSTextLayer.new();
+      overlayText.setStringValue(contrastRatio);
+      if (w < 100) {
+        let delta = (100 - w);
+        x -= delta / 2;
+        w = 100;
+      }
+      overlayText.frame = MSRect.rectWithRect(NSMakeRect(x, y, w, h));
+      overlayText.setTextBehaviour(2);
+      overlayText.setVerticalAlignment(1);
+      overlayText.setFont(NSFont.boldSystemFontOfSize(10));
+      overlayText.setTextColor(MSColor.alloc().initWithImmutableObject_(
+          MSImmutableColor.colorWithSVGString('#fff')));
+      let shadow = overlayText.style().addStylePartOfType(2);
+      shadow.offsetX = 0;
+      shadow.offsetY = 1;
+      shadow.blurRadius = 1;
+      shadow.color = MSColor.alloc().initWithImmutableObject_(
+          MSImmutableColor.colorWithSVGString('rgba(0,0,0,0.5)'))
+      overlayText.setTextAlignment(2);
+      metaGroup.addLayer(overlayText);
+    }
   }
   visibleTextLayerInfos.forEach(({layer}) => layer.setIsVisible(true));
   let returnValue = {};
@@ -242,8 +257,10 @@ function findVisibleTextLayerInfos(parent) {
   for (let symbolInstance of symbolInstances) {
     // symbol instance has flows inside it; make a copy of it,
     // detach it to a group, find the hotspots, and then kill the copy
-    symbolInstance = symbolInstance.detachByReplacingWithGroup();
-    visibleTextLayerInfos = [...visibleTextLayerInfos, ...findVisibleTextLayerInfos(symbolInstance)];
+    let symbolInstanceCopy = symbolInstance.duplicate();
+    symbolInstanceCopy = symbolInstanceCopy.detachByReplacingWithGroup();
+    visibleTextLayerInfos = [...visibleTextLayerInfos, ...findVisibleTextLayerInfos(symbolInstanceCopy)];
+    symbolInstanceCopy.removeFromParent();
   }
 
   return visibleTextLayerInfos;

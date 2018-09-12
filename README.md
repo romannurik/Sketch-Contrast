@@ -2,11 +2,14 @@
 
 # Contrast plugin for Sketch 49+
 
-This plugin generates a pass/fail type contrast report (currently AA only) for an artboard.
+This plugin generates a pass/fail type contrast report (currently AA only) for an artboard or a page:
+
+<img src="https://raw.githubusercontent.com/romannurik/Sketch-Contrast/master/art/example.png" alt="Example screenshot" width="500">
 
 # Installation
 
 * [Download the latest release](https://github.com/romannurik/Sketch-Contrast/releases/latest) and double-click the `.sketchplugin` file to install.
+* Sketch Runner support is coming soon!
 
 # Build instructions
 

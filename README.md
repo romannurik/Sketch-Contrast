@@ -1,6 +1,6 @@
 ![Flow Exporter Icon](https://raw.githubusercontent.com/romannurik/Sketch-Contrast/master/assets/icon.png)
 
-# Contrast plugin for Sketch 49+
+# Contrast plugin for Sketch
 
 This plugin generates a pass/fail type contrast report (currently AA only) for an artboard or a page:
 

@@ -15,12 +15,19 @@
  */
 
 import UI from 'sketch/ui';
-import * as common from './lib/common';
 import * as util from './lib/util';
 
 
 const META_GROUP_NAME = '___CONTRAST___';
 const TEXT_LAYER_PREDICATE = NSPredicate.predicateWithFormat('className == %@', 'MSTextLayer');
+
+
+const Colors = {
+  PASS: util.svgColorToMSColor('rgba(0, 178, 0, .4)'),
+  FAIL: util.svgColorToMSColor('rgba(255, 0, 0, .4)'),
+  UNKNOWN: util.svgColorToMSColor('rgba(255, 213, 79, .4)'),
+};
+
 
 const Mode = {
   IMAGE: 0,
@@ -66,7 +73,7 @@ export function onCheckAllArtboards(context) {
  * (document, page, or artboard). Returns true if anything was removed.
  */
 function removeInlineContrastReports(parent) {
-  let contrastMetaGroups = common.getAllLayersMatchingPredicate(
+  let contrastMetaGroups = util.getAllLayersMatchingPredicate(
       parent,
       NSPredicate.predicateWithFormat('name == %@', META_GROUP_NAME));
   if (contrastMetaGroups.length) {
@@ -99,41 +106,47 @@ function createContrastReport(context, artboard, {mode = Mode.IMAGE} = {}) {
   let bitmapImageRep = NSBitmapImageRep.imageRepWithData(image.TIFFRepresentation());
   for (let {layer, opacity, rectangle} of visibleTextLayerInfos) {
     let {x,y,w,h} = rectangle;
-    let {status, contrastRatio} = getTypeContrastRating(layer, opacity, rectangle, bitmapImageRep);
+    let {status, contrastRatio, note} = getTypeContrastRating(
+        layer, opacity, rectangle, bitmapImageRep);
+    let overlayText = note;
     let rectShape = MSRectangleShape.alloc().init();
     rectShape.frame = MSRect.rectWithRect(NSMakeRect(x, y, w, h));
     let fillLayer = MSShapeGroup.shapeWithPath(rectShape);
-    let fill = fillLayer.style().addStylePartOfType(0);
-    if (status == 'pass') {
-      fill.color = MSColor.colorWithRed_green_blue_alpha(0, .7, 0, .4);
-    } else if (status == 'fail') {
-      fill.color = MSColor.colorWithRed_green_blue_alpha(1, 0, 0, .4);
-    } else if (status == 'unknown') {
-      fill.color = MSColor.colorWithRed_green_blue_alpha(220, 200, 0, .2);
+    let fill = fillLayer.style().addStylePartOfType(util.StylePartType.FILL);
+    switch (status) {
+      case 'pass':
+        fill.color = Colors.PASS;
+        break;
+      case 'fail':
+        fill.color = Colors.FAIL;
+        overlayText = formatContrastRatio(contrastRatio);
+        break;
+      case 'unknown':
+      case 'mixed':
+        fill.color = Colors.UNKNOWN;
+        break;
     }
     metaGroup.addLayer(fillLayer);
-    if (status != 'pass') {
-      let overlayText = MSTextLayer.new();
-      overlayText.setStringValue(contrastRatio);
+    if (overlayText) {
+      let overlayTextLayer = MSTextLayer.new();
+      overlayTextLayer.setStringValue(overlayText);
       if (w < 100) {
         let delta = (100 - w);
         x -= delta / 2;
         w = 100;
       }
-      overlayText.frame = MSRect.rectWithRect(NSMakeRect(x, y, w, h));
-      overlayText.setTextBehaviour(2);
-      overlayText.setVerticalAlignment(1);
-      overlayText.setFont(NSFont.boldSystemFontOfSize(10));
-      overlayText.setTextColor(MSColor.alloc().initWithImmutableObject_(
-          MSImmutableColor.colorWithSVGString('#fff')));
-      let shadow = overlayText.style().addStylePartOfType(2);
+      overlayTextLayer.frame = MSRect.rectWithRect(NSMakeRect(x, y, w, h));
+      overlayTextLayer.setTextBehaviour(2); // fixed
+      overlayTextLayer.setTextAlignment(2); // center
+      overlayTextLayer.setVerticalAlignment(1); // center
+      overlayTextLayer.setFont(NSFont.boldSystemFontOfSize(10));
+      overlayTextLayer.setTextColor(util.svgColorToMSColor('#fff'));
+      let shadow = overlayTextLayer.style().addStylePartOfType(util.StylePartType.SHADOW);
       shadow.offsetX = 0;
       shadow.offsetY = 1;
       shadow.blurRadius = 1;
-      shadow.color = MSColor.alloc().initWithImmutableObject_(
-          MSImmutableColor.colorWithSVGString('rgba(0,0,0,0.5)'))
-      overlayText.setTextAlignment(2);
-      metaGroup.addLayer(overlayText);
+      shadow.color = util.svgColorToMSColor('rgba(0,0,0,0.5)');
+      metaGroup.addLayer(overlayTextLayer);
     }
   }
   visibleTextLayerInfos.forEach(({layer}) => layer.setIsVisible(true));
@@ -148,14 +161,28 @@ function createContrastReport(context, artboard, {mode = Mode.IMAGE} = {}) {
 
 
 /**
+ * Takes a number like 5.561236 and formats it as a contrast ratio like 5.57:1
+ */
+function formatContrastRatio(contrastRatio) {
+  return isNaN(contrastRatio) ? 'NA' : contrastRatio.toFixed(2) + ':1';
+}
+
+
+/**
  * Computes the AA contrast rating (pass/fail) for the given text layer, at the given
  * opacity, using the background determined by the given rectangular cutout of the given
  * NSBitmapImageRep.
  */
 function getTypeContrastRating(textLayer, opacity, {x, y, w, h}, bitmapImageRep) {
   let samplePoints = [
-    [x, y]
+    // TODO: adaptive sampling?
+    [x, y],
+    // as of last testing, runtime diff. sampling 4 vs. 1 points only took ~5% longer
+    [x + w - 1, y],
+    [x, y + h - 1],
+    [x + h - 1, y + h - 1],
   ];
+
   let textStyleAttr = textLayer.style().textStyle().attributes();
   let textMSImmColor = textStyleAttr.MSAttributedStringColorAttribute;
   if (!textMSImmColor) {
@@ -168,6 +195,7 @@ function getTypeContrastRating(textLayer, opacity, {x, y, w, h}, bitmapImageRep)
     log(`Can't get text color for text layer ${names.join(' > ')}`);
     return {status: 'unknown', contrastRatio: 'NA'};
   }
+
   let textColor = {
     r: Math.round(255 * textMSImmColor.red()),
     g: Math.round(255 * textMSImmColor.green()),
@@ -179,6 +207,8 @@ function getTypeContrastRating(textLayer, opacity, {x, y, w, h}, bitmapImageRep)
   let isBold = /(medium|bold|black)/i.test(textStyleAttr.NSFont.fontName());
   let largeText = pointSize >= 18 || (isBold && pointSize >= 14);
   let passingContrastForLayer = largeText ? 3 : 4.5;
+
+  let stats = {fail: 0, pass: 0, minCR: Infinity, maxCR: 0};
 
   for (let [x_, y_] of samplePoints) {
     let bgNSColor = bitmapImageRep.colorAtX_y_(x_, y_);
@@ -200,14 +230,28 @@ function getTypeContrastRating(textLayer, opacity, {x, y, w, h}, bitmapImageRep)
     let lum1 = util.srgbLuminance(blendedTextColor);
     let lum2 = util.srgbLuminance(bgColor);
     let contrastRatio = (Math.max(lum1, lum2) + 0.05) / (Math.min(lum1, lum2) + 0.05);
+    stats.minCR = Math.min(stats.minCR, contrastRatio);
+    stats.maxCR = Math.max(stats.maxCR, contrastRatio);
     if (contrastRatio < passingContrastForLayer) {
-      return {status: 'fail', contrastRatio: contrastRatio.toFixed(2) + ':1'};
+      ++stats.fail;
     } else {
-      return {status: 'pass', contrastRatio: contrastRatio.toFixed(2) + ':1'};
+      ++stats.pass;
     }
   }
 
-  return {status: 'pass', contrastRatio: 'NA'};
+  if (stats.fail > 0 && stats.pass > 0) {
+    return {
+      status: 'mixed',
+      contrastRatio: stats.minCR,
+      note: formatContrastRatio(stats.minCR) + ' - ' + formatContrastRatio(stats.maxCR),
+    };
+  } else if (stats.fail > 0) {
+    return { status: 'fail', contrastRatio: stats.minCR };
+  } else if (stats.pass > 0) {
+    return { status: 'pass', contrastRatio: stats.minCR };
+  } else {
+    return { status: 'unknown', contrastRatio: 0 };
+  }
 }
 
 
@@ -216,7 +260,7 @@ function getTypeContrastRating(textLayer, opacity, {x, y, w, h}, bitmapImageRep)
  * containing the layer, its frame rectangle, and effective opacity.
  */
 function findVisibleTextLayerInfos(parent) {
-  let visibleTextLayers = common.getAllLayersMatchingPredicate(
+  let visibleTextLayers = util.getAllLayersMatchingPredicate(
       parent,
       TEXT_LAYER_PREDICATE);
 
@@ -250,7 +294,7 @@ function findVisibleTextLayerInfos(parent) {
     };
   });
 
-  let symbolInstances = common.getAllLayersMatchingPredicate(
+  let symbolInstances = util.getAllLayersMatchingPredicate(
       parent,
       NSPredicate.predicateWithFormat('className == %@', 'MSSymbolInstance'))
       .filter(symbolInstance => doesSymbolInstanceHaveTextLayers(symbolInstance));
@@ -276,14 +320,14 @@ function doesSymbolInstanceHaveTextLayers(symbolInstance) {
   }
 
   // TODO: cache true/false for a given master
-  if (common.getAllLayersMatchingPredicate(
+  if (util.getAllLayersMatchingPredicate(
     symbolInstance.symbolMaster(),
     TEXT_LAYER_PREDICATE).length) {
     return true;
   }
 
   // check for symbol instance children that have flows
-  let symbolInstances = common.getAllLayersMatchingPredicate(
+  let symbolInstances = util.getAllLayersMatchingPredicate(
       symbolInstance.symbolMaster(),
       NSPredicate.predicateWithFormat('className == %@', 'MSSymbolInstance'));
   for (let symbolInstance of symbolInstances) {

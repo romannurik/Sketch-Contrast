@@ -1,3 +1,47 @@
+/*
+ * Copyright 2018 Google Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+export const StylePartType = {
+  FILL: 0,
+  // BORDER: 1 ?
+  SHADOW: 2,
+  INNER_SHADOW: 3,
+};
+
+
+/**
+ * Returns the first layer matching the given NSPredicate
+ *
+ * @param {MSDocument|MSLayerGroup} parent The document or layer group to search.
+ * @param {NSPredicate} predicate Search predicate
+ */
+export function getAllLayersMatchingPredicate(parent, predicate) {
+  if (parent instanceof MSDocument) {
+    // MSDocument
+    return parent.pages().reduce(
+        (acc, page) => acc.concat(getAllLayersMatchingPredicate(page, predicate)),
+        []);
+  }
+
+  // assume MSLayerGroup
+  return Array.from(parent.children().filteredArrayUsingPredicate(predicate));
+}
+
+
 /**
  * Calculates the luminance of the given RGB color.
  */
@@ -37,6 +81,14 @@ export function mixColors(c1, c2, amount) {
 
 
 /**
+ * Returns an MSColor for the given SVG color (e.g. #fff or rgba(0,0,0,.5))
+ */
+export function svgColorToMSColor(svgColor) {
+  return MSColor.alloc().initWithImmutableObject_(MSImmutableColor.colorWithSVGString(svgColor));
+}
+
+
+/**
  * Saves the given artboard to a temporary PNG file and returns the path and an NSImage
  */
 export function getArtboardImage(document, artboard) {
@@ -53,5 +105,20 @@ export function getArtboardImage(document, artboard) {
   return {
     path: tempPath,
     image: NSImage.alloc().initWithContentsOfFile(tempPath)
+  };
+}
+
+
+/**
+ * Decorator-style function that returns a new function that logs the duration of each
+ * call to it.
+ */
+export function profiled(fn) {
+  return function () {
+    let start = Number(new Date());
+    let retVal = fn.apply(this, arguments);
+    let durationMs = Number(new Date()) - start;
+    log(fn.name + ': ' + (durationMs > 1000 ? `${(durationMs / 1000).toFixed(2)}s` : durationMs + 'ms'));
+    return retVal;
   };
 }

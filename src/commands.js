@@ -105,49 +105,9 @@ function createContrastReport(context, artboard, {mode = Mode.IMAGE} = {}) {
   let {image} = util.getArtboardImage(context.document, artboardCopy);
   let bitmapImageRep = NSBitmapImageRep.imageRepWithData(image.TIFFRepresentation());
   for (let {layer, opacity, rectangle} of visibleTextLayerInfos) {
-    let {x,y,w,h} = rectangle;
-    let {status, contrastRatio, note} = getTypeContrastRating(
+    let rating = getTypeContrastRating(
         layer, opacity, rectangle, bitmapImageRep);
-    let overlayText = note;
-    let rectShape = MSRectangleShape.alloc().init();
-    rectShape.frame = MSRect.rectWithRect(NSMakeRect(x, y, w, h));
-    let fillLayer = MSShapeGroup.shapeWithPath(rectShape);
-    let fill = fillLayer.style().addStylePartOfType(util.StylePartType.FILL);
-    switch (status) {
-      case 'pass':
-        fill.color = Colors.PASS;
-        break;
-      case 'fail':
-        fill.color = Colors.FAIL;
-        overlayText = formatContrastRatio(contrastRatio);
-        break;
-      case 'unknown':
-      case 'mixed':
-        fill.color = Colors.UNKNOWN;
-        break;
-    }
-    metaGroup.addLayer(fillLayer);
-    if (overlayText) {
-      let overlayTextLayer = MSTextLayer.new();
-      overlayTextLayer.setStringValue(overlayText);
-      if (w < 100) {
-        let delta = (100 - w);
-        x -= delta / 2;
-        w = 100;
-      }
-      overlayTextLayer.frame = MSRect.rectWithRect(NSMakeRect(x, y, w, h));
-      overlayTextLayer.setTextBehaviour(2); // fixed
-      overlayTextLayer.setTextAlignment(2); // center
-      overlayTextLayer.setVerticalAlignment(1); // center
-      overlayTextLayer.setFont(NSFont.boldSystemFontOfSize(10));
-      overlayTextLayer.setTextColor(util.svgColorToMSColor('#fff'));
-      let shadow = overlayTextLayer.style().addStylePartOfType(util.StylePartType.SHADOW);
-      shadow.offsetX = 0;
-      shadow.offsetY = 1;
-      shadow.blurRadius = 1;
-      shadow.color = util.svgColorToMSColor('rgba(0,0,0,0.5)');
-      metaGroup.addLayer(overlayTextLayer);
-    }
+        renderContrastReportOverlay(metaGroup, rectangle, rating);
   }
   visibleTextLayerInfos.forEach(({layer}) => layer.setIsVisible(true));
   let returnValue = {};
@@ -157,6 +117,53 @@ function createContrastReport(context, artboard, {mode = Mode.IMAGE} = {}) {
 
   artboardCopy.removeFromParent();
   return returnValue;
+}
+
+
+/**
+ * Renders a contrast report overlay at the given coordinates (pass/fail, etc)
+ */
+function renderContrastReportOverlay(metaGroup, {x, y, w, h}, {contrastRatio, note, status}) {
+  let overlayText = note;
+  let rectShape = MSRectangleShape.new();
+  rectShape.frame = MSRect.rectWithRect(NSMakeRect(x, y, w, h));
+  let fillLayer = MSShapeGroup.shapeWithPath(rectShape);
+  let fill = fillLayer.style().addStylePartOfType(util.StylePartType.FILL);
+  switch (status) {
+    case 'pass':
+      fill.color = Colors.PASS;
+      break;
+    case 'fail':
+      fill.color = Colors.FAIL;
+      overlayText = formatContrastRatio(contrastRatio);
+      break;
+    case 'unknown':
+    case 'mixed':
+      fill.color = Colors.UNKNOWN;
+      break;
+  }
+  metaGroup.addLayer(fillLayer);
+  if (overlayText) {
+    let overlayTextLayer = MSTextLayer.new();
+    overlayTextLayer.setStringValue(overlayText);
+    if (w < 100) {
+      let delta = (100 - w);
+      x -= delta / 2;
+      w = 100;
+    }
+    overlayTextLayer.frame = MSRect.rectWithRect(NSMakeRect(x, y, w, h));
+    overlayTextLayer.setTextBehaviour(2); // fixed
+    overlayTextLayer.setTextAlignment(2); // center
+    overlayTextLayer.setVerticalAlignment(1); // center
+    overlayTextLayer.setFont(NSFont.boldSystemFontOfSize(10));
+    overlayTextLayer.setTextColor(util.svgColorToMSColor('#fff'));
+    let shadow = overlayTextLayer.style().addStylePartOfType(util.StylePartType.SHADOW);
+    shadow.offsetX = 0;
+    shadow.offsetY = 1;
+    shadow.blurRadius = 1;
+    shadow.color = util.svgColorToMSColor('rgba(0,0,0,0.5)');
+    metaGroup.addLayer(overlayTextLayer);
+  }
 }
 
 
@@ -258,6 +265,8 @@ function getTypeContrastRating(textLayer, opacity, {x, y, w, h}, bitmapImageRep)
 /**
  * Deep-search for visible MSTextLayers in the given parent layer, returning an array
  * containing the layer, its frame rectangle, and effective opacity.
+ *
+ * Has side effects! Will detach symbols.
  */
 function findVisibleTextLayerInfos(parent) {
   let visibleTextLayers = util.getAllLayersMatchingPredicate(
@@ -299,12 +308,25 @@ function findVisibleTextLayerInfos(parent) {
       NSPredicate.predicateWithFormat('className == %@', 'MSSymbolInstance'))
       .filter(symbolInstance => doesSymbolInstanceHaveTextLayers(symbolInstance));
   for (let symbolInstance of symbolInstances) {
-    // symbol instance has flows inside it; make a copy of it,
-    // detach it to a group, find the hotspots, and then kill the copy
-    let symbolInstanceCopy = symbolInstance.duplicate();
-    symbolInstanceCopy = symbolInstanceCopy.detachByReplacingWithGroup();
-    visibleTextLayerInfos = [...visibleTextLayerInfos, ...findVisibleTextLayerInfos(symbolInstanceCopy)];
-    symbolInstanceCopy.removeFromParent();
+    // symbol instance has text layers; detach it to a group to allow hiding them
+    // before doing that, see if the symbol includes its background in instances
+    let master = symbolInstance.symbolMaster();
+    let frame = symbolInstance.frame();
+    let bgColor = (master && master.includeBackgroundColorInInstance())
+        ? master.backgroundColor() : null;
+    let detachedSymbol = symbolInstance.detachByReplacingWithGroup();
+    visibleTextLayerInfos = [
+      ...visibleTextLayerInfos,
+      ...findVisibleTextLayerInfos(detachedSymbol)
+    ];
+    if (bgColor) {
+      let rectShape = MSRectangleShape.new();
+      rectShape.frame = frame.copy();
+      let bgLayer = MSShapeGroup.shapeWithPath(rectShape);
+      let fill = bgLayer.style().addStylePartOfType(util.StylePartType.FILL);
+      fill.color = bgColor;
+      detachedSymbol.parentGroup().insertLayer_beforeLayer_(bgLayer, detachedSymbol);
+    }
   }
 
   return visibleTextLayerInfos;
@@ -326,7 +348,7 @@ function doesSymbolInstanceHaveTextLayers(symbolInstance) {
     return true;
   }
 
-  // check for symbol instance children that have flows
+  // check for symbol instance children that have text layers
   let symbolInstances = util.getAllLayersMatchingPredicate(
       symbolInstance.symbolMaster(),
       NSPredicate.predicateWithFormat('className == %@', 'MSSymbolInstance'));

@@ -125,9 +125,7 @@ function createContrastReport(context, artboard, {mode = Mode.IMAGE} = {}) {
  */
 function renderContrastReportOverlay(metaGroup, {x, y, w, h}, {contrastRatio, note, status}) {
   let overlayText = note;
-  let rectShape = MSRectangleShape.new();
-  rectShape.frame = MSRect.rectWithRect(NSMakeRect(x, y, w, h));
-  let fillLayer = MSShapeGroup.shapeWithPath(rectShape);
+  let fillLayer = MSShapeGroup.shapeWithRect(NSMakeRect(x, y, w, h));
   let fill = fillLayer.style().addStylePartOfType(util.StylePartType.FILL);
   switch (status) {
     case 'pass':
@@ -320,9 +318,8 @@ function findVisibleTextLayerInfos(parent) {
       ...findVisibleTextLayerInfos(detachedSymbol)
     ];
     if (bgColor) {
-      let rectShape = MSRectangleShape.new();
-      rectShape.frame = frame.copy();
-      let bgLayer = MSShapeGroup.shapeWithPath(rectShape);
+      let bgLayer = MSShapeGroup.shapeWithRect(
+          NSMakeRect(frame.x(), frame.y(), frame.width(), frame.height()));
       let fill = bgLayer.style().addStylePartOfType(util.StylePartType.FILL);
       fill.color = bgColor;
       detachedSymbol.parentGroup().insertLayer_beforeLayer_(bgLayer, detachedSymbol);

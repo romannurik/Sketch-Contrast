@@ -312,7 +312,12 @@ function findVisibleTextLayerInfos(parent) {
     let frame = symbolInstance.frame();
     let bgColor = (master && master.includeBackgroundColorInInstance())
         ? master.backgroundColor() : null;
-    let detachedSymbol = symbolInstance.detachByReplacingWithGroup();
+    let detachedSymbol;
+    if (symbolInstance.detachStylesAndReplaceWithGroupRecursively) {
+      detachedSymbol = symbolInstance.detachStylesAndReplaceWithGroupRecursively(true);
+    } else {
+      detachedSymbol = symbolInstance.detachByReplacingWithGroup();
+    }
     visibleTextLayerInfos = [
       ...visibleTextLayerInfos,
       ...findVisibleTextLayerInfos(detachedSymbol)

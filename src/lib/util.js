@@ -101,6 +101,7 @@ export function getArtboardImage(document, artboard) {
       // rect // we pass this to avoid trimming
       ).firstObject();
   exportRequest.format = 'png';
+  exportRequest.scale = 1;
   document.saveArtboardOrSlice_toFile_(exportRequest, tempPath);
   return {
     path: tempPath,

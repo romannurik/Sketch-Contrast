@@ -96,8 +96,15 @@ export function getArtboardImage(document, artboard) {
       NSUUID.UUID().UUIDString() + '.png');
   // let frame = artboard.frame();
   // let rect = NSMakeRect(frame.origin.x, frame.origin.y, frame.size.width, frame.size.height);
+  let ancestry;
+  if (artboard.ancestry) {
+    // sketch 66
+    ancestry = artboard.ancestry();
+  } else {
+    ancestry = MSImmutableLayerAncestry.ancestryWithMSLayer_(artboard);
+  }
   let exportRequest = MSExportRequest.exportRequestsFromLayerAncestry_(
-      MSImmutableLayerAncestry.ancestryWithMSLayer_(artboard),
+      ancestry,
       // rect // we pass this to avoid trimming
       ).firstObject();
   exportRequest.format = 'png';

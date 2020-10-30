@@ -189,8 +189,8 @@ function getTypeContrastRating(textLayer, opacity, {x, y, w, h}, bitmapImageRep)
   ];
 
   let textStyleAttr = textLayer.style().textStyle().attributes();
-  let textMSImmColor = textStyleAttr.MSAttributedStringColorAttribute;
-  if (!textMSImmColor) {
+  let textMSColor = textStyleAttr.MSAttributedStringColorAttribute; // actually an MSImmutableColor
+  if (!textMSColor) {
     let names = [];
     let parent = textLayer;
     while (parent) {
@@ -201,11 +201,24 @@ function getTypeContrastRating(textLayer, opacity, {x, y, w, h}, bitmapImageRep)
     return {status: 'unknown', contrastRatio: 'NA'};
   }
 
+  // check for tints (fill styles on parent layers that override the text color)
+  let parent = textLayer.parentGroup();
+  while (parent) {
+    let fills = Array.from(parent.style().stylePartsOfType(util.StylePartType.FILL));
+    if (fills.length) {
+      for (let fill of fills) {
+        textMSColor = fill.color();
+        console.log(`FILL: ${fill.color()} ` + parent.name());
+      }
+    }
+    parent = parent.parentGroup();
+  }
+
   let textColor = {
-    r: Math.round(255 * textMSImmColor.red()),
-    g: Math.round(255 * textMSImmColor.green()),
-    b: Math.round(255 * textMSImmColor.blue()),
-    a: Math.round(255 * textMSImmColor.alpha()),
+    r: Math.round(255 * textMSColor.red()),
+    g: Math.round(255 * textMSColor.green()),
+    b: Math.round(255 * textMSColor.blue()),
+    a: Math.round(255 * textMSColor.alpha()),
   };
 
   let pointSize = textStyleAttr.NSFont.pointSize() / 1.333333333; // CSS px -> pt

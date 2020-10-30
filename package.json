@@ -24,7 +24,7 @@
   "homepage": "https://github.com/romannurik/Sketch-Contrast#readme",
   "scripts": {
     "build": "skpm-build",
-    "watch": "skpm-build --watch",
+    "start": "skpm-build --watch",
     "postinstall": "npm run build && skpm-link"
   },
   "devDependencies": {

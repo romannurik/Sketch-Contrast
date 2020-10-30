@@ -208,7 +208,6 @@ function getTypeContrastRating(textLayer, opacity, {x, y, w, h}, bitmapImageRep)
     if (fills.length) {
       for (let fill of fills) {
         textMSColor = fill.color();
-        console.log(`FILL: ${fill.color()} ` + parent.name());
       }
     }
     parent = parent.parentGroup();

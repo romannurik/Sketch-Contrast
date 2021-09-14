@@ -326,7 +326,8 @@ function findVisibleTextLayerInfos(parent) {
         ? master.backgroundColor() : null;
     let detachedSymbol;
     if (symbolInstance.detachStylesAndReplaceWithGroupRecursively) {
-      detachedSymbol = symbolInstance.detachStylesAndReplaceWithGroupRecursively(true);
+      let map = symbolInstance.detachStylesAndReplaceWithGroupRecursively();
+      detachedSymbol = map.objectForKey(symbolInstance);
     } else {
       detachedSymbol = symbolInstance.detachByReplacingWithGroup();
     }

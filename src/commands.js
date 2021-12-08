@@ -327,14 +327,17 @@ function findVisibleTextLayerInfos(parent) {
     let detachedSymbol;
     if (symbolInstance.detachStylesAndReplaceWithGroupRecursively) {
       let map = symbolInstance.detachStylesAndReplaceWithGroupRecursively();
-      detachedSymbol = map.objectForKey(symbolInstance);
+      detachedSymbol = map.objectForKey(symbolInstance.immutableModelObject());
     } else {
       detachedSymbol = symbolInstance.detachByReplacingWithGroup();
     }
-    visibleTextLayerInfos = [
-      ...visibleTextLayerInfos,
-      ...findVisibleTextLayerInfos(detachedSymbol)
-    ];
+
+    if (detachedSymbol) {
+      visibleTextLayerInfos = [
+        ...visibleTextLayerInfos,
+        ...findVisibleTextLayerInfos(detachedSymbol)
+      ];
+    }
     if (bgColor) {
       let bgLayer = MSShapeGroup.shapeWithRect(
           NSMakeRect(frame.x(), frame.y(), frame.width(), frame.height()));
